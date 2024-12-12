@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useVirtualizer } from "@tanstack/react-virtual"
 import {
   ColumnDef,
   ColumnFiltersState,
@@ -8,11 +9,8 @@ import {
   VisibilityState,
   flexRender,
   getCoreRowModel,
-  getFacetedRowModel,
-  getFacetedUniqueValues,
-  getFilteredRowModel,
-  getSortedRowModel,
   useReactTable,
+  type Table as TableType,
 } from "@tanstack/react-table"
 
 import {
@@ -24,8 +22,9 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
-import { useVirtualizer } from "@tanstack/react-virtual"
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useCallback } from "react"
+import { throttle } from "lodash"
+import { Loader2 } from "lucide-react"
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
@@ -34,6 +33,7 @@ interface DataTableProps<TData, TValue> {
   hasMore: boolean
   loading: boolean
   totalCount?: number
+  table: TableType<TData>
 }
 
 export function DataTable<TData, TValue>({
@@ -43,120 +43,76 @@ export function DataTable<TData, TValue>({
   hasMore,
   loading,
   totalCount,
+  table,
 }: DataTableProps<TData, TValue>) {
   const [rowSelection, setRowSelection] = React.useState({})
-  const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
-  const [sorting, setSorting] = React.useState<SortingState>([])
-
-  const table = useReactTable({
-    data,
-    columns,
-    state: {
-      sorting,
-      columnVisibility,
-      rowSelection,
-      columnFilters,
-    },
-    enableRowSelection: true,
-    onRowSelectionChange: setRowSelection,
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    onColumnVisibilityChange: setColumnVisibility,
-    getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFacetedRowModel: getFacetedRowModel(),
-    getFacetedUniqueValues: getFacetedUniqueValues(),
-  })
+  const parentRef = useRef<HTMLDivElement>(null)
 
   const { rows } = table.getRowModel()
-  const parentRef = useRef<HTMLDivElement>(null)
-  const loadMoreRef = useRef<HTMLTableRowElement>(null)
-  const observerRef = useRef<IntersectionObserver>()
 
+  // 虚拟化设置
   const virtualizer = useVirtualizer({
-    count: rows.length + (hasMore ? 1 : 0),
+    count: rows.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 45,
-    overscan: 5,
+    estimateSize: () => 48, // 行高
+    overscan: 5, // 上下额外渲染的行数
   })
 
   const virtualRows = virtualizer.getVirtualItems()
+  const totalSize = virtualizer.getTotalSize()
   const paddingTop = virtualRows.length > 0 ? virtualRows[0].start : 0
   const paddingBottom = virtualRows.length > 0 
-    ? virtualizer.getTotalSize() - virtualRows[virtualRows.length - 1].end 
+    ? totalSize - virtualRows[virtualRows.length - 1].end 
     : 0
 
+  // 滚动加载处理
   useEffect(() => {
-    console.log('Data length:', data.length);
-    console.log('Rows length:', rows.length);
-    console.log('Virtual rows:', virtualRows);
-  }, [data, rows, virtualRows]);
+    const scrollElement = parentRef.current
+    if (!scrollElement || loading || !hasMore) return
 
-  useEffect(() => {
-    const currentLoadMoreRef = loadMoreRef.current
-
-    if (!currentLoadMoreRef || !hasMore || loading) return
-
-    if (observerRef.current) {
-      observerRef.current.disconnect()
-    }
-
-    observerRef.current = new IntersectionObserver(
-      entries => {
-        if (entries[0].isIntersecting && hasMore && !loading) {
-          console.log('Loading more data...');
-          onLoadMore()
-        }
-      },
-      { 
-        root: null,
-        threshold: 0.1,
-        rootMargin: '200px'
+    const handleScroll = throttle(() => {
+      const { scrollTop, scrollHeight, clientHeight } = scrollElement
+      const scrollBottom = Math.ceil(scrollTop + clientHeight)
+      const threshold = 100 // 减小触发阈值
+      
+      if (scrollHeight - scrollBottom <= threshold) {
+        console.log('触发加载:', {
+          scrollTop,
+          scrollHeight,
+          clientHeight,
+          distanceToBottom: scrollHeight - scrollBottom
+        })
+        onLoadMore()
       }
-    )
+    }, 500) // 增加节流时间，避免频繁触发
 
-    observerRef.current.observe(currentLoadMoreRef)
-
+    scrollElement.addEventListener('scroll', handleScroll)
     return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect()
-      }
+      handleScroll.cancel()
+      scrollElement.removeEventListener('scroll', handleScroll)
     }
-  }, [hasMore, loading, onLoadMore])
-
-  // 移除不正确的调试日志
-  useEffect(() => {
-    console.log('Current total count:', totalCount);
-    console.log('Current loaded:', rows.length);
-    console.log('Has more:', hasMore);
-    console.log('Loading:', loading);
-  }, [totalCount, hasMore, loading, rows.length]);
+  }, [loading, hasMore, onLoadMore])
 
   return (
     <div className="rounded-md border">
       <div 
-        ref={parentRef} 
-        className="relative h-[600px] overflow-auto will-change-scroll"
-        style={{ scrollBehavior: 'smooth' }}
+        ref={parentRef}
+        className="relative h-[600px] overflow-auto"
       >
         <Table>
           <TableHeader className="sticky top-0 bg-white dark:bg-gray-950 z-10">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
-                  return (
-                    <TableHead key={header.id} className="whitespace-nowrap">
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
-                    </TableHead>
-                  )
-                })}
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id} className="whitespace-nowrap">
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
+                  </TableHead>
+                ))}
               </TableRow>
             ))}
           </TableHeader>
@@ -168,31 +124,18 @@ export function DataTable<TData, TValue>({
             )}
             {virtualRows.map((virtualRow) => {
               const row = rows[virtualRow.index]
-              if (!row) {
-                return hasMore ? (
-                  <TableRow 
-                    ref={loading ? undefined : loadMoreRef}
-                    key="loader"
-                    className="h-[45px]"
-                  >
-                    <TableCell 
-                      colSpan={columns.length} 
-                      className="text-center text-muted-foreground"
-                    >
-                      {loading ? "加载中..." : "加载更多..."}
-                    </TableCell>
-                  </TableRow>
-                ) : null
-              }
-
               return (
                 <TableRow
                   key={row.id}
+                  className="h-[48px] hover:bg-muted/50 transition-colors relative"
+                  data-index={virtualRow.index}
                   data-state={row.getIsSelected() && "selected"}
-                  className="h-[45px]"
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell 
+                      key={cell.id}
+                      className={cell.column.id === 'select' ? 'relative' : ''}
+                    >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
@@ -204,25 +147,34 @@ export function DataTable<TData, TValue>({
                 <td style={{ height: `${paddingBottom}px` }} colSpan={columns.length} />
               </tr>
             )}
-            {!hasMore && rows.length > 0 && (
-              <TableRow>
-                <TableCell 
-                  colSpan={columns.length} 
-                  className="text-center h-[45px] text-muted-foreground"
-                >
-                  已加载完毕 (共 {rows.length} 行)
-                </TableCell>
-              </TableRow>
+            {(hasMore || loading) && (
+              <tr>
+                <td colSpan={columns.length}>
+                  <div className="h-16 flex items-center justify-center gap-2 text-muted-foreground">
+                    {loading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span className="animate-pulse">正在加载更多数据...</span>
+                      </>
+                    ) : (
+                      <div className="opacity-70 transition-opacity hover:opacity-100">
+                        向下滚动加载更多
+                      </div>
+                    )}
+                  </div>
+                </td>
+              </tr>
             )}
-            {hasMore && rows.length > 0 && (
-              <TableRow>
-                <TableCell 
-                  colSpan={columns.length} 
-                  className="text-center h-[45px] text-muted-foreground"
-                >
-                  已加载 {rows.length} 行 {totalCount ? `(总共 ${totalCount} 行)` : ''}
-                </TableCell>
-              </TableRow>
+            {!hasMore && rows.length > 0 && (
+              <tr>
+                <td colSpan={columns.length}>
+                  <div className="h-16 flex items-center justify-center text-muted-foreground">
+                    <div className="animate-fade-in">
+                      已加载全部数据 (共 {rows.length} 行)
+                    </div>
+                  </div>
+                </td>
+              </tr>
             )}
           </TableBody>
         </Table>
