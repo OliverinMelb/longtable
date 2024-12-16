@@ -117,7 +117,11 @@ export default function Page() {
 
     } catch (error) {
       console.error('批量更新失败:', error);
-      alert(`更新失败: ${error.message || '未知错误'}`);
+      if (error instanceof Error) {
+        alert(`更新失败: ${error.message}`);
+      } else {
+        alert('更新失败: 未知错误');
+      }
     }
   }
 
