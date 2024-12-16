@@ -55,16 +55,16 @@ export const columns: ColumnDef<Business>[] = [
     accessorKey: "state",
     header: "州/省",
   },
-  {
-    accessorKey: "zip",
-    header: "邮编",
-  },
-  {
-    accessorKey: "phone",
-    header: "电话",
-  },
-  {
-    accessorKey: "email",
-    header: "邮箱",
-  }
+  // {
+  //   accessorKey: "zip",
+  //   header: "邮编",
+  // },
+  // {
+  //   accessorKey: "phone",
+  //   header: "电话",
+  // },
+  // {
+  //   accessorKey: "email",
+  //   header: "邮箱",
+  // }
 ] 

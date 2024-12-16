@@ -46,9 +46,9 @@ export function DataTableToolbar<TData>({
           <SelectItem value="address">地址</SelectItem>
           <SelectItem value="city">城市</SelectItem>
           <SelectItem value="state">州/省</SelectItem>
-          <SelectItem value="zip">邮编</SelectItem>
+          {/* <SelectItem value="zip">邮编</SelectItem>
           <SelectItem value="phone">电话</SelectItem>
-          <SelectItem value="email">邮箱</SelectItem>
+          <SelectItem value="email">邮箱</SelectItem> */}
         </SelectContent>
       </Select>
       <Input
