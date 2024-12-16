@@ -104,7 +104,11 @@ export function DataTable<TData, TValue>({
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id} className="whitespace-nowrap">
+                  <TableHead 
+                    key={header.id} 
+                    style={{ width: header.column.getSize() }}
+                    className="whitespace-nowrap"
+                  >
                     {header.isPlaceholder
                       ? null
                       : flexRender(
@@ -134,6 +138,7 @@ export function DataTable<TData, TValue>({
                   {row.getVisibleCells().map((cell) => (
                     <TableCell 
                       key={cell.id}
+                      style={{ width: cell.column.getSize() }}
                       className={cell.column.id === 'select' ? 'relative' : ''}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}

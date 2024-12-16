@@ -42,18 +42,42 @@ export const columns: ColumnDef<Business>[] = [
   {
     accessorKey: "name",
     header: "名称",
+    cell: ({ row }) => (
+      <div className="w-[200px] truncate">
+        {row.getValue("name")}
+      </div>
+    ),
+    size: 200,
   },
   {
     accessorKey: "address",
     header: "地址",
+    cell: ({ row }) => (
+      <div className="w-[300px] truncate">
+        {row.getValue("address")}
+      </div>
+    ),
+    size: 300,
   },
   {
     accessorKey: "city",
     header: "城市",
+    cell: ({ row }) => (
+      <div className="w-[120px] truncate">
+        {row.getValue("city")}
+      </div>
+    ),
+    size: 120,
   },
   {
     accessorKey: "state",
     header: "州/省",
+    cell: ({ row }) => (
+      <div className="w-[80px] truncate">
+        {row.getValue("state")}
+      </div>
+    ),
+    size: 80,
   },
   // {
   //   accessorKey: "zip",
